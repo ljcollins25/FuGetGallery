@@ -31,6 +31,7 @@
     var diff = default(ApiDiff);
     var asm = default(PackageAssembly);
 
+    var autoasm = string.IsNullOrEmpty(inputAssemblyName);
     if (inputAssemblyName == "diff")
     {
         diff = await ApiDiff.GetAsync(package.Id, package.Version.ShortVersionString, framework.Moniker, inputNamespace, httpClient, HttpContext.RequestAborted);
@@ -41,7 +42,7 @@
     }
     var asmDef = asm?.Definition;
 
-    var types = asmDef != null ? (IEnumerable<Mono.Cecil.TypeDefinition>)asmDef.MainModule.Types : new Mono.Cecil.TypeDefinition[0];
+    var types = asmDef != null ? (IEnumerable<Mono.Cecil.TypeDefinition>)asmDef.MainModule.Types : Array.Empty<Mono.Cecil.TypeDefinition>();
 
     var namespaces = types.GroupBy(x => x.Namespace).OrderBy(x => x.Key).Where(x => !string.IsNullOrEmpty(x.Key)).ToList();
 
@@ -91,33 +92,35 @@
     {
         showKlass = "namespace";
         title = ns.Key;
-        description = $"Namespace with {ns.Count():#,0} types";
+        description = $"Namespace with {ns.Count(x => x.IsPublic):#,0} public types";
     }
-    else if (asmDef != null && !autons && asm.FileName.Equals(inputAssemblyName, StringComparison.InvariantCultureIgnoreCase))
+    else if (asmDef != null && !autoasm)
     {
         showKlass = "assembly";
         title = asm.FileName ?? asmDef.Name.Name;
-        description = $"Assembly with {types.Count():#,0} types ({asm.SizeInBytes:#,0} bytes)";
+        description = $"Assembly with {namespaces.Count(x => x.Any(y => y.IsPublic)):#,0} public namespaces ({asm.SizeInBytes:#,0} bytes)";
     }
 
-    var packageIcon = "briefcase";
+    var packageIcon = "package";
 
     string GetIcon(object o)
     {
         if (o == null) return "";
-        if (o is PackageAssembly) return "file";
+        if (o is PackageAssembly) return "assembly";
         if (o is Mono.Cecil.TypeDefinition t)
         {
             var isPublic = t.IsPublic;
             var isEnum = t.IsEnum;
             var isStruct = !isEnum && t.IsValueType;
             var isDel = !(isEnum || isStruct) && t.IsDelegate();
-            var isIface = !(isEnum || isStruct || isDel) && (t.IsInterface || t.IsAbstract);
-            return isEnum ? "menu-hamburger" : (isDel ? "flash" : (isStruct ? "unchecked" : (isIface ? "star-empty" : "star")));
+            var isIface = !(isEnum || isStruct || isDel) && t.IsInterface;
+            var isSclass = !(isEnum || isStruct || isDel || isIface) && t.IsAbstract && t.IsSealed;
+            var isAclass = !(isEnum || isStruct || isDel || isIface || isSclass) && t.IsAbstract;
+            return isEnum ? "enum" : (isDel ? "delegate" : (isStruct ? "struct" : (isIface ? "interface" : (isSclass ? "staticclass" : (isAclass ? "abstractclass" : "class")))));
         }
         if (o is System.Linq.IGrouping<string, Mono.Cecil.TypeDefinition> g)
         {
-            return "book";
+            return "namespace";
         }
         if (o is PackageDependency d) return packageIcon;
         if (o is PackageData p) return packageIcon;
@@ -303,7 +306,7 @@
             {
                 <a class="btn btn-default btn-sm" style="color:#777"
                    href="/packages/@Uri.EscapeDataString(d.PackageId)/@Uri.EscapeDataString(d.VersionSpec)">
-                    <span class="glyphicon glyphicon-@GetIcon(d)" aria-hidden="true"></span>&nbsp;@d.PackageId&nbsp;@d.VersionSpec
+                    <span class="fugeticon fugeticon-@GetIcon(d)" aria-hidden="true"></span>&nbsp;@d.PackageId&nbsp;@d.VersionSpec
                 </a>
             }
         </nav>
@@ -312,12 +315,12 @@
     @if (dependents.Count > 0)
     {
         <nav style="margin-top:0em;line-height:2.75em;">
-            <h4 style="margin-top:0.5em;color:#777;display:inline-block;margin-right:0.5em;padding:0;">Dependents</h4>
+            <h4 style="margin-top:0.5em;color:#777;display:inline-block;margin-right:0.5em;padding:0;">Used By</h4>
             @foreach (var d in (from d in dependents let r = rand.Next() orderby r select d).Take(maxDisplayDependents).OrderBy(x => x))
             {
                 <a class="btn btn-default btn-sm" style="color:#777"
                    href="/packages/@Uri.EscapeDataString(d)">
-                    <span class="glyphicon glyphicon-@packageIcon" aria-hidden="true"></span>&nbsp;@d
+                    <span class="fugeticon fugeticon-@packageIcon" aria-hidden="true"></span>&nbsp;@d
                 </a>
             }
             @if (dependents.Count > maxDisplayDependents)
@@ -401,9 +404,8 @@ else
                             var cls = (active ? "active " : "") + "public-api";
                             <li>
                                 <a class="@cls"
-                                   href="/packages/@Uri.EscapeDataString(package.Id)/@Uri.EscapeDataString(package.Version.ShortVersionString)/lib/@Uri.EscapeDataString(framework.Moniker)/@Uri.EscapeDataString(a.FileName)"
-                                   title="@a.Definition.Name.Version.ToString()">
-                                    <span class="glyphicon glyphicon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.FileName
+                                   href="/packages/@Uri.EscapeDataString(package.Id)/@Uri.EscapeDataString(package.Version.ShortVersionString)/lib/@Uri.EscapeDataString(framework.Moniker)/@Uri.EscapeDataString(a.FileName)">
+                                   <span class="fugeticon fugeticon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.FileName
                                 </a>
                             </li>
                         }
@@ -420,7 +422,7 @@ else
                             <li>
                                 <a class="@cls"
                                    href="/packages/@Uri.EscapeDataString(package.Id)/@Uri.EscapeDataString(package.Version.ShortVersionString)/build/@Uri.EscapeDataString(framework.Moniker)/@Uri.EscapeDataString(a.FileName)">
-                                    <span class="glyphicon glyphicon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.FileName
+                                    <span class="fugeticon fugeticon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.FileName
                                 </a>
                             </li>
                         }
@@ -440,7 +442,7 @@ else
                                 <li>
                                     <a class="@cls"
                                        href="/packages/@Uri.EscapeDataString(package.Id)/@Uri.EscapeDataString(package.Version.ShortVersionString)/@Uri.EscapeDataString(dir)/@Uri.EscapeDataString(framework.Moniker)/@Uri.EscapeDataString(asm.FileName)/@Uri.EscapeDataString(n.Key)">
-                                        <span class="glyphicon glyphicon-@GetIcon(n)" aria-hidden="true"></span>&nbsp;@n.Key
+                                        <span class="fugeticon fugeticon-@GetIcon(n)" aria-hidden="true"></span>&nbsp;@n.Key
                                     </a>
                                 </li>
                             }
@@ -460,7 +462,7 @@ else
                                 <li>
                                     <a class="@cls"
                                        href="@GetUrl(otypeName:t.Name)">
-                                        <span class="glyphicon glyphicon-@GetIcon(t)" aria-hidden="true"></span>&nbsp;@t.GetFriendlyName()
+                                        <span class="fugeticon fugeticon-@GetIcon(t)" aria-hidden="true"></span>&nbsp;@t.GetFriendlyName()
                                     </a>
                                 </li>
                             }
@@ -478,7 +480,7 @@ else
                             <li>
                                 <a style="font-weight:@bold;color:@color;"
                                    href="/packages/@Uri.EscapeDataString(package.Id)/@Uri.EscapeDataString(package.Version.ShortVersionString)/content/@a.ArchiveEntry.FullName.Substring(8)">
-                                    <span class="glyphicon glyphicon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.ArchiveEntry.FullName.Substring(8)
+                                    <span class="fugeticon fugeticon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.ArchiveEntry.FullName.Substring(8)
                                 </a>
                             </li>
                         }
@@ -495,7 +497,7 @@ else
                             <li>
                                 <a style="font-weight:@bold;color:@color;"
                                    href="/packages/@Uri.EscapeDataString(package.Id)/@Uri.EscapeDataString(package.Version.ShortVersionString)/tools/@a.ArchiveEntry.FullName.Substring(6)">
-                                    <span class="glyphicon glyphicon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.ArchiveEntry.FullName.Substring(6)
+                                    <span class="fugeticon fugeticon-@GetIcon(a)" aria-hidden="true"></span>&nbsp;@a.ArchiveEntry.FullName.Substring(6)
                                 </a>
                             </li>
                         }
@@ -507,7 +509,7 @@ else
             <article>
                 @if (showKlass == "type")
                 {
-                    <h1 id="type" style="margin-top:0"><span class="glyphicon glyphicon-@GetIcon(typ)" aria-hidden="true"></span>&nbsp;@typ.GetFriendlyName()</h1>
+                    <h1 id="type" style="margin-top:0"><span class="fugeticon fugeticon-@GetIcon(typ)" aria-hidden="true"></span>&nbsp;@typ.GetFriendlyName()</h1>
                     <div class="member-code" style="font-size:120%">
                         @Html.Raw(typ.GetPrototypeHtml(framework: framework, docs?.MemberXmlDocs, linkToCode: false, inExtensionClass: false))
                     </div>
@@ -536,17 +538,47 @@ else
                 }
                 else if (showKlass == "namespace")
                 {
-                    <h1 id="namespace" style="margin-top:0"><span class="glyphicon glyphicon-@GetIcon(ns)" aria-hidden="true"></span>&nbsp;@ns.Key</h1>
+                    <h1 id="namespace" style="margin-top:0"><span class="fugeticon fugeticon-@GetIcon(ns)" aria-hidden="true"></span>&nbsp;@ns.Key</h1>
                     <p class="description-section">@description</p>
+                    @if (ns != null) {
+                        var pubTypes = ns.Where(x => x.IsPublic).ToList();
+                        var byIcon = pubTypes.GroupBy(x => GetIcon(x));
+                        var groupings = new[] { 
+                            ("class", "Classes"),
+                            ("struct", "Structures"),
+                            ("enum", "Enumerations"),
+                            ("staticclass", "Static Classes"),
+                            ("abstractclass", "Abstract Classes"),
+                            ("interface", "Interfaces"),
+                        };
+                        foreach (var (icon, groupTitle) in groupings) {
+                            var gtypes = byIcon.FirstOrDefault(x => x.Key == icon);
+                            if (gtypes == null) continue;
+                            <h3><span class="fugeticon fugeticon-@icon" aria-hidden="true"></span>&nbsp;@groupTitle</h3>
+                            foreach (var t in gtypes.OrderBy(x => x.Name))
+                            {
+                                var tdocs = asm?.GetTypeDocumentation(t, languageCode);
+                                <a href="@GetUrl(otypeName:t.Name)">
+                                    <div class="boxcontents boxcontents-type">
+                                        <span class="title"><span class="fugeticon fugeticon-@icon" aria-hidden="true"></span>&nbsp;@t.Name</span>
+                                        <small>@tdocs.SummaryText</small>
+                                    </div></a>
+                            }
+                        }
+                    }
                 }
                 else if (showKlass == "assembly")
                 {
-                    <h1 id="assembly" style="margin-top:0"><span class="glyphicon glyphicon-@GetIcon(asm)" aria-hidden="true"></span>&nbsp;@asm.FileName <small>@asmDef.Name.Version</small></h1>
+                    <h1 id="assembly" style="margin-top:0"><span class="fugeticon fugeticon-@GetIcon(asm)" aria-hidden="true"></span>&nbsp;@asm.FileName <small>@asmDef.Name.Version</small></h1>
                     <p class="description-section">@description</p>
+                    @foreach (var n in namespaces.Where(x => x.Any(y => y.IsPublic)).OrderBy(x => x.Key))
+                    {
+                        <h4><a class="public-api" href="@GetUrl(onamespace:n.Key)"><span class="fugeticon fugeticon-namespace" aria-hidden="true"></span>&nbsp;@n.Key</a> <small>with @n.Count(x => x.IsPublic) public types</small></h4>
+                    }
                 }
                 else
                 {
-                    <h1 id="package" style="margin-top:0"><span class="glyphicon glyphicon-@GetIcon(package)" aria-hidden="true"></span>&nbsp;@package.Id <small>@package.Version</small></h1>
+                    <h1 id="package" style="margin-top:0"><span class="fugeticon fugeticon-@GetIcon(package)" aria-hidden="true"></span>&nbsp;@package.Id <small>@package.Version</small></h1>
                     <p class="description-section">@description</p>
                     <pre><code>@package.NuspecXml</code></pre>
                 }
@@ -568,9 +600,12 @@ else
         function showResults(r) {
             function c(t) { return document.createElement(t); }
             function getIcon(t) {
-                if (t == "type") return "star";
-                if (t == "method") return "flash";
-                return "minus";
+                if (t == "type") return "class";
+                if (t == "method") return "method";
+                if (t == "field") return "field";
+                if (t == "event") return "event";
+                if (t == "property") return "property";
+                return "unknown";
             }
             function getColor(t) {
                 if (t == "type") return "c-tr";
@@ -592,7 +627,7 @@ else
                 var g = c("span");
                 var sm = c("small");
                 sm.appendChild(document.createTextNode (e.parent));
-                g.className = "glyphicon glyphicon-" + getIcon(e.type);
+                g.className = "fugeticon fugeticon-" + getIcon(e.type);
                 li.appendChild(a);
                 a.className = "link " + getColor(e.type);
                 a.appendChild(g);

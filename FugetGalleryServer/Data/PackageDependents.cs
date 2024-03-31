@@ -38,18 +38,19 @@ namespace FuGetGallery
             
             protected override async Task<PackageDependents> GetValueAsync (string lowerId, HttpClient httpClient, CancellationToken token)
             {
+                //
+                // ISSUE #155: Diabled due to database corruption.
+                //
                 var deps = new PackageDependents ();
-                try {
-#if HAS_SQLITE
-                    var db = new Database ();
-                    foreach (var d in await db.Table<StoredPackageDependency>().Where (x => x.LowerPackageId == lowerId).ToListAsync ()) {
-                        deps.DependentIds.Add (d.DependentPackageId);
-                    }
-#endif
-                }
-                catch (Exception ex) {
-                    Console.WriteLine (ex);
-                }
+                //try {
+                //    var db = new Database ();
+                //    foreach (var d in await db.Table<StoredPackageDependency>().Where (x => x.LowerPackageId == lowerId).ToListAsync ()) {
+                //        deps.DependentIds.Add (d.DependentPackageId);
+                //    }
+                //}
+                //catch (Exception ex) {
+                //    Console.WriteLine (ex);
+                //}
                 return deps;
             }
         }
