@@ -24,8 +24,8 @@ namespace FuGetGallery
         public void ConfigureServices(IServiceCollection services)
         {
             try {
-                new Database ().MigrateAsync ().Wait ();
-                services.AddScoped<Database, Database> ();
+                //new Database ().MigrateAsync ().Wait ();
+                //services.AddScoped<Database, Database> ();
             }
             catch (Exception dbex) {
                 Console.WriteLine ($"Failed to open the database: {dbex}");

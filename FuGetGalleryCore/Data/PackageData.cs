@@ -593,18 +593,18 @@ namespace FuGetGallery
 
             private static async Task<PackageData> ReadPackageFromUrl (PackageData package, HttpClient httpClient, CancellationToken token)
             {
-                System.Console.WriteLine ($"DOWNLOADING {package.DownloadUrl}");
-                //throw new NotSupportedException ();
-                var r = await httpClient.GetAsync (package.DownloadUrl, token);
-                var data = new MemoryStream ();
-                using (var s = await r.Content.ReadAsStreamAsync ()) {
-                    await s.CopyToAsync (data, 16 * 1024, token);
-                }
-                data.Position = 0;
+                //System.Console.WriteLine ($"DOWNLOADING {package.DownloadUrl}");
+                //var r = await httpClient.GetAsync (package.DownloadUrl, token);
+                //var data = new MemoryStream ();
+                //using (var s = await r.Content.ReadAsStreamAsync ()) {
+                //    await s.CopyToAsync (data, 16 * 1024, token);
+                //}
+                //data.Position = 0;
                 System.Console.WriteLine ($"READING " + package);
-                await Task.Run (() => package.Read (data, httpClient), token).ConfigureAwait (false);
+                await package.ReadAsync(httpClient, package.DownloadUrl).ConfigureAwait(false);
+                //await Task.Run (() => package.Read (data, httpClient), token).ConfigureAwait (false);
                 System.Console.WriteLine ($"DONE LOADING " + package);
-                //await package.MatchLicenseAsync (httpClient).ConfigureAwait (false);
+                await package.MatchLicenseAsync (httpClient).ConfigureAwait (false);
                 //await package.SaveDependenciesAsync ();
                 return package;
             }
