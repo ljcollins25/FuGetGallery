@@ -377,7 +377,7 @@ namespace FuGetGallery
                     throw new Exception ("Failed to find metadata in " + xdoc);
                 }
                 string GetS (string name, string def = "") {
-                    try { return meta.Element(ns + name).Value.Trim(); }
+                    try { return meta.Element(ns + name)?.Value?.Trim() ?? def; }
                     catch { return def; }
                 }
                 string GetUrl (string name) {

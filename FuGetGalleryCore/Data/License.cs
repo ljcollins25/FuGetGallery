@@ -250,6 +250,7 @@ namespace FuGetGallery
 
         void LoadTemplate ()
         {
+            var names = GetType ().Assembly.GetManifestResourceNames ();
             using (var s = GetType ().Assembly.GetManifestResourceStream ($"FuGetGallery.Resources.Licenses.{TemplateName}.txt")) {
                 if (s == null) {
                     throw new Exception ("Missing license " + TemplateName);
